@@ -1,0 +1,34 @@
+---
+- name: Install and configure ftp client
+  hosts: ftp_client
+  become: yes
+
+  tasks:
+    - name: Install ftp client tools
+      yum:
+        name: "{{ item }}"
+        state: latest
+      loop:
+        - ftp
+        - lftp
+
+    - name: create directory for FTP downloads
+      file:
+        path: /ftp_dowloads
+        state: directory
+        owner: ansible
+        group: ansible
+        mode: '0755'
+
+    - name: deploy ftp client configuration from template
+      template:
+        src: vsftpd.j2
+        dest: /etc/vsftpd/vsftpd.conf
+      notify:
+        - restart ftp client service
+
+  handlers:
+    - name: restart ftp client service
+      systemd:
+        name: ftp
+        state: restarted

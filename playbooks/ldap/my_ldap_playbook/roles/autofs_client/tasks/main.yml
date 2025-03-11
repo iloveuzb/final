@@ -1,0 +1,21 @@
+---
+- name: Install autofs
+  yum:
+    name: autofs
+    state: present
+
+- name: Configure /etc/auto.master to use NFS home directories
+  template:
+    src: auto.master.j2
+    dest: /etc/auto.master
+
+- name: Create auto.home file for NFS mount configuration
+  template:
+    src: auto.home.j2
+    dest: /etc/auto.home
+
+- name: Restart autofs service
+  systemd:
+    name: autofs
+    state: restarted
+    enabled: yes

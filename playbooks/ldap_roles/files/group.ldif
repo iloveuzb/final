@@ -1,0 +1,4 @@
+dn: cn=bravo,ou=groups,dc=ziyotek2,dc=local
+objectClass: top
+objectClass: posixGroup
+gidNumber: 5000

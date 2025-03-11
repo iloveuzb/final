@@ -1,0 +1,75 @@
+---
+- name: Initialize Docker Swarm on the Manager Node
+  hosts: manager
+  become: true
+  tasks:
+    - name: Ensure the node is not part of any swarm
+      command: docker swarm leave --force
+      ignore_errors: yes
+
+    - name: Initialize Docker Swarm
+      command: docker swarm init --advertise-addr 192.168.161.21
+      register: swarm_init
+      ignore_errors: true
+
+    - name: Get join token for worker nodes
+      command: docker swarm join-token worker -q
+      register: join_token
+      when: swarm_init.rc == 0
+
+    - name: Set join token fact for worker nodes
+      set_fact:
+        join_token: "{{ join_token.stdout }}"
+      when: join_token.stdout != ""
+
+    - name: Display join token for worker nodes
+      debug:
+        msg: "Worker nodes can join with the token: {{ join_token }}"
+      when: join_token is defined and join_token != ""
+
+    - name: Get join token for manager nodes (optional for additional managers)
+      command: docker swarm join-token manager -q
+      register: manager_join_token
+      when: swarm_init.rc == 0
+
+    - name: Display join token for manager nodes (optional)
+      debug:
+        msg: "Manager nodes can join with the token: {{ manager_join_token.stdout }}"
+      when: manager_join_token.stdout != ""
+
+    - name: Set join token for worker nodes to use
+      add_host:
+        name: "{{ item }}"
+        join_token: "{{ join_token }}"
+      with_items: "{{ groups['client'] }}"
+      when: join_token is defined and join_token != ""
+
+- name: Join Worker Nodes to Docker Swarm
+  hosts: client
+  become: true
+  tasks:
+    - name: Ensure the node is not part of any existing swarm
+      command: docker swarm leave --force
+      ignore_errors: yes
+
+    - name: Debug join token on worker node
+      debug:
+        msg: "Join token for worker nodes is: {{ join_token }}"
+
+    - name: Join the Docker Swarm
+      command: docker swarm join --token {{ join_token }} 192.168.161.21:2377
+      when: join_token is defined and join_token != ""
+
+- name: Verify Docker Swarm Status on Manager Node
+  hosts: manager
+  become: true
+  tasks:
+    - name: Check the status of the Docker Swarm nodes
+      command: docker node ls
+      register: node_ls
+      changed_when: false
+
+    - name: Display the node status on manager node
+      debug:
+        msg: "{{ node_ls.stdout }}"
+

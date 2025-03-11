@@ -1,0 +1,23 @@
+---
+- name: Ensure root login is disabled in SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+  notify:
+    - Restart SSH
+
+- name: Enable firewall
+  service:
+    name: firewalld
+    state: started
+    enabled: true
+
+- name: Check SELinux status
+  debug:
+    var: ansible_selinux.status
+
+- name: Disable SELinux temporarily
+  command: setenforce 0
+  when: ansible_selinux.status != "disabled"
+

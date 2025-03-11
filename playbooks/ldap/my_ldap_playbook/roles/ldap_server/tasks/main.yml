@@ -1,0 +1,24 @@
+---
+- name: Install OpenLDAP server
+  yum:
+    name:
+      - openldap-servers
+      - openldap-clients
+    state: present
+
+- name: Start and enable slapd service
+  systemd:
+    name: slapd
+    state: started
+    enabled: yes
+
+- name: Configure slapd
+  template:
+    src: slapd.conf.j2
+    dest: /etc/openldap/slapd.conf
+  notify:
+    - restart slapd
+
+- name: Add initial LDAP structure
+  command: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/initial.ldif
+  when: not ansible_check_mode

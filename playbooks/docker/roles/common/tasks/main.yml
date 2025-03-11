@@ -1,0 +1,10 @@
+---
+- name: Install common packages
+  package:
+    name:
+      - bind-utils
+      - man
+      - man-pages
+      - mlocate
+      - sysstat
+    state: present

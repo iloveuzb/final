@@ -1,0 +1,28 @@
+---
+- name: Install LDAP client packages
+  yum:
+    name:
+      - nsswitch
+      - nslcd
+      - authconfig
+      - autofs
+    state: present
+
+- name: Configure nsswitch.conf for LDAP
+  template:
+    src: nsswitch.conf.j2
+    dest: /etc/nsswitch.conf
+  notify:
+    - restart nslcd
+
+- name: Configure PAM to use LDAP
+  lineinfile:
+    path: "/etc/pam.d/system-auth"
+    regexp: "^auth\\s+required\\s+pam_unix.so"
+    line: "auth    required        pam_ldap.so"
+
+- name: Enable and start nslcd service
+  systemd:
+    name: nslcd
+    state: started
+    enabled: yes

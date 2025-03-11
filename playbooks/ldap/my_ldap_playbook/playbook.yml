@@ -1,0 +1,20 @@
+---
+- name: Setup LDAP Authentication and NFS Automounting
+  hosts: all
+  become: yes
+  roles:
+    - ldap_client
+    - autofs_client
+
+- name: Setup OpenLDAP Server
+  hosts: ldap_server
+  become: yes
+  roles:
+    - ldap_server
+    - ldap_users
+
+- name: Setup NFS Server for Home Directories
+  hosts: nfs_server
+  become: yes
+  roles:
+    - nfs_server

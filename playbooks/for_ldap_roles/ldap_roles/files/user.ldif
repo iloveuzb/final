@@ -1,0 +1,16 @@
+dn: uid=jsmith,ou=users,dc=ziyotek1,dc=local
+objectClass: top
+objectClass: account
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: jsmith venna
+uid: jsmith
+uidNumber: 10000
+gidNumber: 10000
+homeDirectory: /home/users/jsmith
+loginShell: /bin/bash
+gecos: Jsmith,System Engineer
+userPassword: {crypt}x
+shadowLastChange: 0
+shadowMax: 0
+shadowWarning: 0

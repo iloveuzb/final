@@ -1,0 +1,9 @@
+dn: uid={{ username }},ou=users,dc=example,dc=com
+objectClass: inetOrgPerson
+uid: {{ username }}
+cn: {{ full_name }}
+sn: {{ sn }}
+userPassword: {{ password }}
+gidNumber: 1001
+homeDirectory: /home/{{ username }}
+loginShell: /bin/bash

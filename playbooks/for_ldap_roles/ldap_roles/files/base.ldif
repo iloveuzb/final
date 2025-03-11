@@ -1,0 +1,15 @@
+dn: dc=ziyotek1,dc=local
+objectClass: dcObject
+objectClass: organization
+o: ziyotek1.local
+dc: ziyotek1
+
+dn: ou=users,dc=ziyotek1,dc=local
+objectClass: organizationalUnit
+objectClass: top
+ou: users
+
+dn: ou=groups,dc=ziyotek1,dc=local
+objectClass: organizationalUnit
+objectClass: top
+ou: groups

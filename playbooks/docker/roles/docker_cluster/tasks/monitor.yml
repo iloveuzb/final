@@ -1,0 +1,11 @@
+---
+- name: Check Docker container health
+  docker_container:
+    name: my_web_app
+    state: started
+  register: result
+
+- name: Show health of the cluster
+  debug:
+    msg: "Docker container status: {{ result.state }}"
+

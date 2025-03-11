@@ -1,0 +1,118 @@
+---
+- name: Install NFS Server
+  hosts: nfs
+  become: yes
+  tasks:
+    - name: Install NFS packages
+      yum:
+        name:
+          - nfs-utils
+        state: present
+
+    - name: Enable and start rpcbind service
+      systemd:
+        name: rpcbind
+        enabled: yes
+        state: started
+
+    - name: Enable and start nfs-server service
+      systemd:
+        name: nfs-server
+        enabled: yes
+        state: started
+
+    - name: Enable and start nfs-client.target service
+      systemd:
+        name: nfs-client.target
+        enabled: yes
+        state: started
+
+    - name: Enable and start nfs-idmapd service
+      systemd:
+        name: nfs-idmapd
+        enabled: yes
+        state: started
+
+    - name: Create shared directories
+      file:
+        path: /var/nfs/{{ item }}
+        state: directory
+        owner: nobody
+        group: nobody
+        mode: '0755'
+      with_items:
+        - shared
+        - autofs
+      become: yes
+    
+    - name: Ensure no duplicate entries in /etc/exports
+      lineinfile:
+        path: /etc/exports
+        line: /var/nfs/{{ item.dir }} {{ item.client }}(rw,sync,no_all_squash)
+        create: yes
+        state: present
+        insertafter: EOF
+      with_items:
+        - { dir: "shared", client: "nfsclient" }
+        - { dir: "autofs", client: "nfsclient" }
+        - { dir: "shared", client: "auto1" }
+        - { dir: "autofs", client: "auto1" }
+        - { dir: "shared", client: "ftp101" }
+        - { dir: "autofs", client: "ftp101" }
+        - { dir: "shared", client: "dworker2" }
+        - { dir: "autofs", client: "dworker2" }
+        - { dir: "shared", client: "dns" }
+        - { dir: "autofs", client: "dns" }
+        - { dir: "shared", client: "dns2" }
+        - { dir: "autofs", client: "dns2" }
+        - { dir: "shared", client: "dns3" }
+        - { dir: "autofs", client: "dns3" }
+        - { dir: "shared", client: "ntp1" }
+        - { dir: "autofs", client: "ntp1" }
+        - { dir: "shared", client: "ntp2" }
+        - { dir: "autofs", client: "ntp2" }
+        - { dir: "shared", client: "web1" }
+        - { dir: "autofs", client: "web1" }
+        - { dir: "shared", client: "web2" }
+        - { dir: "autofs", client: "web2" }
+        - { dir: "shared", client: "web3" }
+        - { dir: "autofs", client: "web3" }
+        - { dir: "shared", client: "load" }
+        - { dir: "autofs", client: "load" }
+        - { dir: "shared", client: "dworker1" }
+        - { dir: "autofs", client: "dworker1" }
+        - { dir: "shared", client: "docker1" }
+        - { dir: "autofs", client: "docker1" }
+        - { dir: "shared", client: "ldap1" }
+        - { dir: "autofs", client: "ldap1" }
+        - { dir: "shared", client: "ng101" }
+        - { dir: "autofs", client: "ng101" }
+        - { dir: "shared", client: "db101" }
+        - { dir: "autofs", client: "db101" }
+        - { dir: "shared", client: "db102" }
+        - { dir: "autofs", client: "db102" }
+        - { dir: "shared", client: "192.168.161.14" }
+        - { dir: "autofs", client: "192.168.161.14" }
+       
+    - name: Export NFS shares
+      command: exportfs -ra
+
+    - name: Open firewall for NFS services
+      firewalld:
+        service: "{{ item }}"
+        permanent: true
+        state: enabled
+      with_items:
+        - mountd
+        - rpc-bind
+        - nfs
+      notify: reload_firewalld
+
+    - name: Restart NFS server
+      systemd:
+        name: nfs-server
+        state: restarted
+
+  handlers:
+    - name: reload_firewalld
+      command: firewall-cmd --reload

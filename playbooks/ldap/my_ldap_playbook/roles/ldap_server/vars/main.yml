@@ -1,0 +1,2 @@
+ldap_admin_password: secret
+ldap_base_dn: "dc=example,dc=com"

@@ -1,0 +1,47 @@
+---
+- name: Configure Nagios Clients and NRPE
+  hosts: nagios_clients
+  become: true
+  tasks:
+    - name: Install EPEL repository
+      ansible.builtin.yum:
+        name: epel-release
+        state: present
+
+    - name: Install NRPE and Nagios Plugins
+      ansible.builtin.yum:
+        name:
+          - nrpe
+          - nagios-plugins-all
+        state: present
+        skip_broken: yes  # Skip broken packages
+
+    - name: Start and enable NRPE service
+      ansible.builtin.systemd:
+        name: nrpe
+        state: started
+        enabled: true
+
+    - name: Ensure firewalld is installed
+      ansible.builtin.yum:
+        name: firewalld
+        state: present
+      become: true
+
+    - name: Ensure firewalld is running
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: true
+      become: true
+
+    - name: Check if firewalld is running
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+      register: firewalld_status
+      ignore_errors: true
+
+    
+
+    

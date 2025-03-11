@@ -1,0 +1,62 @@
+---
+- name: Install and Configure AutoFS
+  hosts: nfs_client
+  become: yes
+
+  tasks:
+    - name: Install autofs package
+      dnf:
+        name: autofs
+        state: present
+
+    - name: Create master map file for indirect mounts
+      copy:
+        dest: /etc/auto.master.d/demo.autofs
+        content: |
+          /shares /etc/auto.demo
+
+    - name: Create master map file for direct mounts
+      copy:
+        dest: /etc/auto.master.d/direct.autofs
+        content: |
+          /- /etc/auto.direct
+
+    - name: Create indirect mapping file
+      copy:
+        dest: /etc/auto.demo
+        content: |
+          work -rw,sync nfs101:/shares/work
+
+    - name: Create direct mapping file
+      copy:
+        dest: /etc/auto.direct
+        content: |
+          /mnt/docs -rw,sync nfs101:/shares/docs
+
+    - name: Start and enable autofs service
+      systemd:
+        name: autofs
+        state: started
+        enabled: yes
+
+    - name: Create indirect wildcard mapping file
+      copy:
+        dest: /etc/auto.demo
+        content: |
+          * -rw,sync nfs101:/shares/&
+
+    - name: Create direct mapping file for /mnt/docs
+      copy:
+        dest: /etc/auto.direct
+        content: |
+          /mnt/docs -rw,sync nfs101:/shares/docs
+
+    - name: Create mount points
+      file:
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - /shares
+        - /mnt/docs
+
+

@@ -1,0 +1,23 @@
+---
+- name: Create LDAP users
+  ldap_entry:
+    dn: "uid={{ item.username }},ou=users,dc=example,dc=com"
+    state: present
+    objectClass:
+      - top
+      - person
+      - organizationalPerson
+      - inetOrgPerson
+    attributes:
+      cn: "{{ item.full_name }}"
+      sn: "{{ item.sn }}"
+      uid: "{{ item.username }}"
+      userPassword: "{{ item.password }}"
+      gidNumber: "1001"
+      homeDirectory: "/home/{{ item.username }}"
+      loginShell: "/bin/bash"
+  loop:
+    - { username: "jsmith", full_name: "John Smith", sn: "Smith", password: "password123" }
+    - { username: "mjones", full_name: "Mary Jones", sn: "Jones", password: "password123" }
+  notify:
+    - restart slapd

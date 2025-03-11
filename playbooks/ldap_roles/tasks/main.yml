@@ -1,0 +1,246 @@
+---
+- name: making cache
+  yum:
+    update_cache: yes
+
+- name: updating packages
+  yum:
+    name: '*'
+    state: latest
+
+- name: installing necessary packages
+  yum:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - openldap
+    - 'openldap-clients'
+    - 'openldap-servers'
+    - openssl
+    - httpd
+
+- name: starting and enabling slapd
+  service:
+    name: slapd
+    state: started
+    enabled: yes
+
+- name: checking if the LDAP password has already been set
+  stat:
+    path: /etc/ldap_password_set
+  register: flag
+
+- name: generate password if not generated yet
+  shell: "slappasswd -s password"
+  register: slappasswd_output
+  changed_when: False
+  when: not flag.stat.exists
+
+- name: create file for password check
+  shell: touch /etc/ldap_password_set
+
+- name: creating hdb.ldif file
+  template:
+    src: hdbldif.j2
+    dest: /home/ansible/hdb.ldif
+    owner: root
+    group: root
+    mode: '0644'
+  when: not flag.stat.exists
+
+- name: adding hdb.ldif for LDAP recognition
+  shell: ldapmodify -Y EXTERNAL -H ldapi:/// -f hdb.ldif
+  when: not flag.stat.exists
+
+- name: creating monitor.ldif
+  copy:
+    src: monitor.ldif
+    dest: /home/ansible/monitor.ldif
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: adding monitor.ldif for LDAP recognition
+  shell: ldapmodify -Y EXTERNAL -H ldapi:/// -f monitor.ldif
+
+- name: ensuring directory for certificates exists
+  file:
+    path: "{{ certs_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: checking if CA key is already created
+  stat:
+    path: "{{ certs_dir }}/CA.key"
+  register: cakey
+
+- name: generating CA key
+  shell: cd /etc/openldap/certs && openssl genrsa -out CA.key 2048
+  when: not cakey.stat.exists
+  register: ca_key
+
+- name: self signing certificate
+  shell: |
+    cd /etc/openldap/certs && openssl req -x509 -new -nodes -key CA.key -sha256 -days 1024 -out CA.crt \
+    -subj "/C=US/ST=Virginia/L=Vienna/O=Ziyotek/OU=IT/CN=Ziyotek Root CA/emailAddress=admin@ziyotek.com"
+  when: ca_key is changed
+
+- name: checking if ldap key exists
+  stat:
+    path: "{{ certs_dir }}/ldap.key"
+  register: ldap_key
+
+- name: generating ldap.key
+  shell: cd /etc/openldap/certs && openssl genrsa -out ldap.key 2048
+  when: not ldap_key.stat.exists
+  register: ldap1_key
+
+- name: openssl for ldap 
+  shell: |
+    cd /etc/openldap/certs && openssl req -new -key ldap.key -out ldap.csr \
+    -subj "/C=US/ST=Virginia/L=Vienna/O=Ziyotek/OU=IT/CN=prdx-ldap201.ziyotek2.local/emailAddress=admin@ziyotek.com"
+  when: ldap1_key is changed
+  register: key_creation_result
+
+- name: signing certificate
+  shell: |
+    cd /etc/openldap/certs && \
+    openssl x509 -req -in ldap.csr \
+    -CA CA.crt \
+    -CAkey CA.key \
+    -CAcreateserial \
+    -out ldap.crt \
+    -days 1460 -sha256
+  when: key_creation_result is changed
+
+- name: creating key.ldif and setting up keys
+  template:
+    src: keyldif.j2
+    dest: /home/ansible/key.ldif
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: adding key.ldif for LDAP recognition
+  shell: ldapmodify -Y EXTERNAL -H ldapi:/// -f key.ldif 
+
+- name: starting and enabling httpd service
+  service:
+    name: httpd
+    state: started
+    enabled: yes
+    
+- name: copying CA.crt to /var/www/html
+  shell: cp /etc/openldap/certs/CA.crt /var/www/html/ 
+
+- name: restarting slapd service
+  service:
+    name: slapd
+    state: restarted
+
+- name: creating and configuring base.ldif
+  copy:
+    src: base.ldif
+    dest: /home/ansible/base.ldif
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: adding base.ldif for LDAP recognition
+  shell: ldapadd -x -w password -D "cn=admin,dc=ziyotek2,dc=local" -f base.ldif
+
+- name: adding cosine.ldif schema for LDAP
+  shell: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
+
+- name: adding nis.ldif schema for LDAP
+  shell: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/nis.ldif
+
+- name: adding inetorgperson.ldif schema for LDAP
+  shell: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
+
+- name: creating and configuring user.ldif for LDAP
+  copy:
+    src: user.ldif
+    dest: /home/ansible/user.ldif
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: adding user.ldif for LDAP recognition
+  shell: ldapadd -x -w password -D "cn=admin,dc=ziyotek2,dc=local" -f user.ldif 
+
+- name: setting password for user adam
+  shell: ldappasswd -s password -w password -D "cn=admin,dc=ziyotek2,dc=local" -x "uid=adam,ou=users,dc=ziyotek2,dc=local"
+
+- name: creating and configuring group.ldif
+  copy:
+    src: group.ldif
+    dest: /home/ansible/group.ldif
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: adding group.ldif for LDAP recognition
+  shell: ldapadd -x -w password -D "cn=admin,dc=ziyotek2,dc=local" -f group.ldif 
+
+- name: adding user adam to group 'bravo'
+  copy:
+    src: modify_user.ldif
+    dest: /home/ansible/modify_user.ldif
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: adding modify_user.ldif for LDAP recognition
+  shell: ldapadd -x -w password -D "cn=admin,dc=ziyotek2,dc=local" -f modify_user.ldif
+
+- name: restart slapd service
+  service:
+    name: slapd
+    state: restarted
+
+- name: searching for user adam within LDAP
+  shell: ldapsearch -x -LLL -b "dc=ziyotek2,dc=local" "(uid=adam)"
+  register: result
+
+- name: displaying output from search
+  debug:
+    msg: "{{ result.stdout }}"
+
+## codes below to make LDAP GUI
+
+- name: installing epel-release
+  yum:
+    name: epel-release
+    state: present
+
+- name: installing phpldapadmin and httpd
+  yum:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - phpldapadmin
+    - httpd
+
+- name: starting and enabling httpd
+  service:
+    name: httpd
+    state: started
+    enabled: yes
+
+- name: configuring config.php for ldapadmin
+  template:
+    src: configphp.j2
+    dest: /etc/phpldapadmin/config.php
+    backup: yes
+
+- name: configuring phpldapadmin.conf for httpd
+  template:
+    src: phpldapadminconf.j2
+    dest: /etc/httpd/conf.d/phpldapadmin.conf
+    backup: yes
+
+- name: restarting httpd
+  service:
+    name: httpd
+    state: restarted

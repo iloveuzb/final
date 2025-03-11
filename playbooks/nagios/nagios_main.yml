@@ -1,0 +1,124 @@
+---
+- name: Install and configure Nagios on Rocky Linux 9
+  hosts: nagios_server
+  become: true
+
+  tasks:
+    - name: Install necessary packages for monitoring
+      dnf:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - gcc
+        - glibc
+        - glibc-common
+        - gd
+        - gd-devel
+        - make
+        - net-snmp
+        - openssl-devel
+        - httpd
+        - php
+        - unzip
+        - wget
+        - postfix
+        - perl
+        - autoconf
+        - automake
+        - libtool
+
+    - name: Download Nagios Core
+      get_url:
+        url: https://github.com/NagiosEnterprises/nagioscore/archive/nagios-4.5.9.tar.gz
+        dest: /home/ansible/nagios-4.5.9.tar.gz
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Unzip downloaded archive
+      shell: tar xvf /home/ansible/nagios-4.5.9.tar.gz -C /home/ansible/
+
+    - name: Prepare Nagios for installation
+      shell: cd /home/ansible/nagioscore-nagios-4.5.9 && ./configure
+
+    - name: Compile Nagios Core source code
+      shell: cd /home/ansible/nagioscore-nagios-4.5.9 && make all && make install-groups-users
+
+    - name: Add Apache user to the Nagios group
+      shell: usermod -aG nagios apache
+
+    - name: Install compiled binaries and necessary scripts
+      shell: cd /home/ansible/nagioscore-nagios-4.5.9 && make install && make install-daemoninit
+
+    - name: Start and enable httpd service
+      service:
+        name: httpd
+        state: started
+        enabled: yes
+
+    - name: Install configurations for Nagios
+      shell: cd /home/ansible/nagioscore-nagios-4.5.9 && make install-commandmode && make install-config && make install-webconf
+
+    - name: Download Nagios plugins
+      get_url:
+        url: http://nagios-plugins.org/download/nagios-plugins-2.4.9.tar.gz
+        dest: /home/ansible/nagios-plugins-2.4.9.tar.gz
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Unzip Nagios plugins archive
+      shell: tar xzvf /home/ansible/nagios-plugins-2.4.9.tar.gz -C /home/ansible/
+
+    - name: Configure and install Nagios plugins
+      shell: cd /home/ansible/nagios-plugins-2.4.9 && ./configure && make && make install
+
+    - name: Configure nagios.cfg
+      template:
+        src: nagios.cfg.j2
+        dest: /usr/local/nagios/etc/nagios.cfg
+        backup: yes
+
+    - name: Ensure that servers directory exists
+      file:
+        path: /usr/local/nagios/etc/servers
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure contacts.cfg
+      template:
+        src: contactscfg.j2
+        dest: /usr/local/nagios/etc/objects/contacts.cfg
+        backup: yes
+
+    - name: Set up password for user nagiosadmin
+      shell: echo "password" | htpasswd -ci /usr/local/nagios/etc/htpasswd.users nagiosadmin
+
+    - name: Fix 403 error by configuring welcome.conf
+      template:
+        src: /home/ansible/playbooks/nagios/welcomeconf.j2
+        dest: /etc/httpd/conf.d/welcome.conf
+        backup: yes
+
+
+    - name: Restart Apache
+      service:
+        name: httpd
+        state: restarted
+
+    - name: Copy configuration files for servers
+      copy:
+        src: "{{ item }}"
+        dest: /usr/local/nagios/etc/servers/
+        owner: root
+        group: root
+        mode: '0644'
+      with_fileglob:
+        - /home/ansible/playbooks/nagios/clients/*
+
+    - name: Restart Nagios
+      service:
+        name: nagios
+        state: restarted

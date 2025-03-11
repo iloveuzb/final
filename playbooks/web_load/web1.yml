@@ -1,0 +1,58 @@
+# setup_apache.yml
+---
+- name: Setup Apache Web Servers
+  hosts: web1
+  become: true
+
+  tasks:
+    - name: Configure /etc/hosts on web servers
+      lineinfile:
+        path: /etc/hosts
+        line: "192.168.161.90   prdx-haproxy101.ziyotek1.local load"
+        create: yes
+
+    - name: Install Apache
+      yum:
+        name: httpd
+        state: present
+      
+    - name: Start and enable Apache service
+      service:
+        name: httpd
+        state: started
+        enabled: true
+
+    - name: Create index.html
+      copy:
+        dest: /var/www/html/index.html
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Welcome to Web Server {{ inventory_hostname }}</title>
+          </head>
+          <body>
+              <h1>Welcome to Web Server {{ inventory_hostname }}</h1>
+              <p><img src="https://media.istockphoto.com/id/1458782106/photo/scenic-aerial-view-of-the-mountain-landscape-with-a-forest-and-the-crystal-blue-river-in.jpg?s=1024x1024&amp;w=is&amp;k=20&amp;c=iPdhO2H3jeYh4UWmNlrXNmiiK04iaLykIMiD9u1yDq4=" alt="Scenic aerial view of the mountain landscape with a forest and the crystal blue river in Jotunheimen National Park Drone high-angle photo of the turquoise-colored mountain river flowing in the pine woodland with a view of the mountain peaks in the background in Innlandet County, Norway Nature Stock Photo" /></p>
+          </body>
+          </html>
+
+    - name: Ensure firewalld is started
+      service:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Open HTTP port in firewall
+      firewalld:
+        port: 80/tcp
+        permanent: true
+        state: enabled
+        immediate: yes
+      notify:
+        - reload firewalld
+
+  handlers:
+    - name: reload firewalld
+      command: firewall-cmd --reload
+      become: true

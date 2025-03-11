@@ -1,0 +1,38 @@
+---
+- name: Install necessary packages for the docker container
+  package:
+    name:
+      - httpd
+      - php
+      - mysql
+      - php-mysqlnd
+    state: present
+
+- name: Ensure Apache is running
+  service:
+    name: httpd
+    state: started
+    enabled: true
+
+- name: Download and untar lab-app
+  get_url:
+    url: "https://aws-tc-largeobjects.s3-us-west-2.amazonaws.com/CUR-TF-200-ACACAD/studentdownload/lab-app.tgz"
+    dest: /tmp/lab-app.tgz
+
+- name: Extract lab-app to /var/www/html
+  unarchive:
+    src: /tmp/lab-app.tgz
+    dest: /var/www/html/
+    remote_src: yes
+
+- name: Set ownership of /var/www/html/rds.conf.php
+  command:
+    cmd: chown apache:root /var/www/html/rds.conf.php
+
+# Copy Dockerfile from local machine to target machine
+- name: Copy Dockerfile to the target machine
+  copy:
+    src: ../../Dockerfile  # Path to Dockerfile on the local machine
+    dest: /home/ansible/Dockerfile  # Destination path on the target machine
+
+

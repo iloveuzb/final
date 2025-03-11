@@ -1,0 +1,135 @@
+---
+- name: Setup and configure HAProxy on Rocky Linux 9
+  hosts: loadbalancer
+  become: yes
+
+  tasks:
+    - name: Making cache
+      yum:
+        update_cache: yes
+
+    - name: Updating packages
+      yum:
+        name: '*'
+        state: latest
+
+    - name: Installing HAProxy
+      yum:
+        name: haproxy
+        state: present
+
+    - name: Check if nginx is installed
+      shell: |
+        systemctl list-units --type=service | grep nginx || true
+      register: nginx_check
+      changed_when: false
+
+    - name: Stop conflicting services
+      service:
+        name: "{{ item }}"
+        state: stopped
+      with_items:
+        - httpd
+        - nginx
+      when: item == 'httpd' or ('nginx' in nginx_check.stdout)
+      ignore_errors: yes
+      
+    - name: Ensure HAProxy configuration directory exists
+      file:
+        path: /etc/haproxy
+        state: directory
+        mode: '0755'
+
+    - name: Configuring haproxy.cfg
+      template:
+        src: haproxy.cfg.j2
+        dest: /etc/haproxy/haproxy.cfg
+        owner: apache
+        group: apache
+        mode: '0644'
+        validate: '/usr/sbin/haproxy -c -f %s'
+        backup: yes
+
+    - name: Configuring /etc/sysconfig/haproxy
+      copy:
+        content: |
+          # Extra options to the haproxy daemon
+          OPTIONS=""
+
+          # Configuration file path
+          CONFIG="/etc/haproxy/haproxy.cfg"
+
+          # PID file path
+          PIDFILE="/var/run/haproxy.pid"
+        dest: /etc/sysconfig/haproxy
+        
+    - name: Fixing HAProxy permissions
+      file:
+        path: /var/lib/haproxy
+        owner: haproxy
+        group: haproxy
+        mode: '0755'
+        state: directory
+        recurse: yes
+
+    - name: Creating HAProxy service unit file
+      copy:
+        dest: /usr/lib/systemd/system/haproxy.service
+        content: |
+          [Unit]
+          Description=HAProxy Load Balancer
+          After=network.target
+
+          [Service]
+          EnvironmentFile=/etc/sysconfig/haproxy
+          ExecStartPre=/usr/sbin/haproxy -c -f /etc/haproxy/haproxy.cfg
+          ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /var/run/haproxy.pid
+          ExecReload=/bin/kill -USR2 $MAINPID
+          KillMode=mixed
+          Restart=always
+          SuccessExitStatus=143
+
+          [Install]
+          WantedBy=multi-user.target
+        
+    - name: Reloading systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Starting and enabling HAProxy
+      service:
+        name: haproxy
+        state: started
+        enabled: yes
+
+    
+    - name: Install Apache
+      yum:
+        name: httpd
+        state: present
+
+    - name: Start and enable httpd
+      service:
+        name: httpd.service
+        state: started
+        enabled: yes
+
+    - name: Reload firewalld
+      ansible.builtin.command: firewall-cmd --reload
+      become: true
+
+    - name: Configure firewall on load balancer
+      firewalld:
+        port: "{{ item }}"
+        permanent: yes
+        state: enabled
+      with_items:
+        - "80/tcp"
+        - "80/udp"
+        - "8080/tcp"
+        - "8080/udp"
+
+  handlers:
+    - name: reload firewalld
+      command: firewall-cmd --reload
+      become: true

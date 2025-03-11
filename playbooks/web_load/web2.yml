@@ -1,0 +1,58 @@
+# setup_apache.yml
+---
+- name: Setup Apache Web Servers
+  hosts: web2
+  become: true
+  
+  tasks:
+    - name: Configure /etc/hosts on web servers
+      lineinfile:
+        path: /etc/hosts
+        line: "192.168.161.90   prdx-haproxy101.ziyotek1.local load"
+        create: yes
+
+    - name: Install Apache
+      yum:
+        name: httpd
+        state: present
+      
+    - name: Start and enable Apache service
+      service:
+        name: httpd
+        state: started
+        enabled: true
+
+    - name: Create index.html
+      copy:
+        dest: /var/www/html/index.html
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Welcome to Web Server {{ inventory_hostname }}</title>
+          </head>
+          <body>
+              <h1>Welcome to Web Server {{ inventory_hostname }}</h1>
+              <p><img src="https://www.planetware.com/wpimages/2019/11/canada-in-pictures-beautiful-places-to-photograph-morraine-lake.jpg" alt="Canada in Pictures: 18 Beautiful Places to Photograph ..." /></p>
+          </body>
+          </html>
+
+    - name: Ensure firewalld is started
+      service:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Open HTTP port in firewall
+      firewalld:
+        port: 80/tcp
+        permanent: true
+        state: enabled
+        immediate: yes
+      notify:
+        - reload firewalld
+
+  handlers:
+    - name: reload firewalld
+      command: firewall-cmd --reload
+      become: true

@@ -1,0 +1,19 @@
+---
+- name: Install NFS server
+  yum:
+    name: nfs-utils
+    state: present
+
+- name: Configure /etc/exports to share home directories
+  template:
+    src: exports.j2
+    dest: /etc/exports
+
+- name: Start and enable NFS service
+  systemd:
+    name: nfs-server
+    state: started
+    enabled: yes
+
+- name: Export NFS shares
+  command: exportfs -a

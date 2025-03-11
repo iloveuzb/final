@@ -1,0 +1,4 @@
+dn: cn=bravo,ou=groups,dc=ziyotek2,dc=local
+changetype: modify
+add: memberuid
+memberuid: adam

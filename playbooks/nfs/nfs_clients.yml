@@ -1,0 +1,122 @@
+---
+- name: Configure NFS client
+  hosts: nfs_client
+  become: yes
+
+  tasks:
+    - name: Install required packages
+      yum:
+        name: 
+          - nfs-utils
+        state: latest
+
+    - name: Start and enable rpcbind service
+      systemd:
+        name: rpcbind
+        enabled: yes
+        state: started
+
+    - name: Start and enable nfs-server service
+      systemd:
+        name: nfs-server
+        enabled: yes
+        state: started
+
+    - name: Start and enable nfs-lock service
+      systemd:
+        name: nfs-client.target
+        enabled: yes
+        state: started
+
+    - name: Start and enable nfs-idmapd service
+      systemd:
+        name: nfs-idmapd
+        enabled: yes
+        state: started
+
+    - name: Check NFS share availability
+      command: showmount -e nfs101
+      register: nfs_shares
+
+    - debug:
+        var: nfs_shares.stdout
+
+    - name: Create client shared directory
+      ansible.builtin.command:
+        cmd: mkdir -p /clientshare
+      become: true
+    
+    - name: Change ownership of client shared directory
+      ansible.builtin.command:
+        cmd: chown nobody:nobody /clientshare
+      become: true
+
+    - name: Set SELinux context for /clientshare
+      ansible.builtin.command:
+        cmd: restorecon -Rv /clientshare
+      become: true
+
+    - name: Mount the NFS share
+      mount:
+        src: nfs101:/var/nfs/shared
+        path: /clientshare
+        fstype: nfs
+        opts: rw,sync,hard,intr
+        state: mounted
+
+    - name: Ensure the NFS share is mounted at boot time
+      mount:
+        src: nfs101:/var/nfs/shared
+        path: /clientshare
+        fstype: nfs
+        opts: rw,sync,hard,intr
+        state: present
+
+    - name: Ensure the autofs share is mounted at boot time
+      mount:
+        src: nfs101:/var/nfs/autofs
+        path: /home/users
+        fstype: nfs
+        opts: rw,sync,hard,intr
+        state: present
+
+    - name: Create autofs shared directory
+      ansible.builtin.command:
+        cmd: mkdir -p /home/users
+      become: true
+
+    - name: Change ownership of auto shared directory
+      ansible.builtin.command:
+        cmd: chown nobody:nobody /home/users
+      become: true
+
+    - name: Set SELinux context for /clientshare
+      ansible.builtin.command:
+        cmd: restorecon -Rv /home/users
+        become: true
+
+
+    - name: Open firewall ports for NFS
+      firewalld:
+        service: nfs
+        state: enabled
+        permanent: yes
+      become: true
+
+    - name: Open firewall ports for mountd
+      firewalld:
+        service: mountd
+        state: enabled
+        permanent: yes
+      become: true
+
+    - name: Open firewall ports for rpc-bind
+      firewalld:
+        service: rpc-bind
+        state: enabled
+        permanent: yes
+      become: true
+
+  handlers:
+    - name: reload_firewalld
+      command: firewall-cmd --reload

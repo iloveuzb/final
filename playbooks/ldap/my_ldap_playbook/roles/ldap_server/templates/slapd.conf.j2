@@ -1,0 +1,11 @@
+# slapd configuration
+# Edit with your LDAP domain settings
+include /etc/openldap/schema/core.schema
+pidfile /var/run/openldap/slapd.pid
+argsfile /var/run/openldap/slapd.args
+
+database bdb
+suffix "dc=example,dc=com"
+rootdn "cn=admin,dc=example,dc=com"
+rootpw secret
+directory /var/lib/ldap

@@ -1,0 +1,11 @@
+---
+- name: Configure Docker Cluster and Security
+  hosts: all
+  become: true
+  roles:
+    - common
+    - security
+    - docker_cluster
+
+
+

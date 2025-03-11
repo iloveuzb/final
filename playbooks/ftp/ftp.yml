@@ -1,0 +1,75 @@
+---
+- name: install and configure ftp server
+  hosts: ftp
+  become: yes
+
+  tasks:
+    - name: install vsftpd
+      yum:
+        name: vsftpd
+        state: latest
+
+    - name: Start and Enable vsftpd
+      systemd:
+        name: vsftpd
+        enabled: yes
+        state: started
+
+    - name: add anon_root line after anonymus_enable line
+      blockinfile:
+        path: /etc/vsftpd/vsftpd.conf
+        marker: "# {mark} ANSIBLE MANAGED BLOCK {{ item }}"
+        block: |
+          {{ item }}
+          anon_root=/var/ftp/pub
+      loop:
+        - anonymous_enable=Yes
+
+    - name: restart vsftpd service
+      systemd:
+        name: vsftpd
+        state: restarted
+
+    - name: create ftp user
+      ansible.builtin.user:
+        name: ftpuser
+        state: present
+
+    - name: set ftp user password
+      ansible.builtin.command: echo "password" | passwd --stdin ftpuser
+
+    - name: Disable selinux temporarily
+      selinux:
+        policy: targeted
+        state: disabled
+
+    - name: set selinux state to permissive in the current session
+      command: setenforce 0
+      ignore_errors: yes
+
+    - name: Add FTP TCP port to firewalld
+      ansible.builtin.command: firewall-cmd --add-port=21/tcp --permanent
+      async: 600
+      poll: 0
+      ignore_errors: yes
+      become: yes
+
+    
+    - name: Reload firewalld
+      ansible.builtin.command: firewall-cmd --reload
+      async: 600
+      poll: 0
+      become: yes
+
+    - name: deploy vsftpd configuration from template
+      template:
+        src: vsftpd.j2
+        dest: /etc/vsftpd/vsftpd.conf
+      notify:
+        - restart vsftpd service
+
+  handlers:
+    - name: restart vsftpd service
+      systemd:
+        name: vsftpd
+        state: restarted

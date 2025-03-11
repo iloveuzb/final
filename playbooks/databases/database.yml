@@ -1,0 +1,102 @@
+---
+- hosts: all
+  become: yes
+
+  tasks:
+  - name: Add MariaDB yum repo
+    template:
+      src: /home/ansible/playbooks/databases/MariaDBRepo.j2
+      dest: /etc/yum.repos.d/mariadb.repo
+
+  - name: Installing epel-release
+    yum:
+      name: epel-release
+      state: present
+
+  - name: Installing MariaDB packages
+    yum:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - MariaDB-server
+      - MariaDB-client
+
+  - name: Installing Python 3 and MySQL-python for MySQL
+    yum:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - python3
+      - python3-PyMySQL
+
+  - name: Start and enable MariaDB service
+    service:
+      name: mariadb
+      state: started
+      enabled: yes
+
+  - name: Set root user password
+    mysql_user:
+      login_user: root
+      login_unix_socket: /var/lib/mysql/mysql.sock
+      user: root
+      password: "password"
+      host: localhost
+      state: present
+
+#GUI version of databases
+  - name: Install Apache HTTP Server (httpd)
+    yum:
+      name: httpd
+      state: present
+
+  - name: Start and enable httpd service
+    service:
+      name: httpd
+      state: started
+      enabled: yes
+
+  - name: Install PHP and phpMyAdmin
+    yum:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - php
+      - php-mysqlnd
+      - php-json
+      - php-mbstring
+      - phpMyAdmin
+
+  - name: Configure phpMyAdmin
+    template:
+      src: phpmyadminconf.j2
+      dest: /etc/httpd/conf.d/phpMyAdmin.conf
+      backup: yes
+
+  - name: Restart httpd service
+    service:
+      name: httpd
+      state: restarted
+
+#Adding firewall rules
+  - name: Open firewall port for HTTP (80)
+    firewalld:
+      port: 80/tcp
+      permanent: yes
+      state: enabled
+
+  - name: Open firewall port for HTTPS (443)
+    firewalld:
+      port: 443/tcp
+      permanent: yes
+      state: enabled
+
+  - name: Open firewall port for MariaDB (3306)
+    firewalld:
+      port: 3306/tcp
+      permanent: yes
+      state: enabled
+
+  handlers:
+    - name: reload_firewalld
+      command: firewall-cmd --reload
